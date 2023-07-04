@@ -45,9 +45,9 @@ class AbstractClient(StoppableThread, metaclass=ABCMeta):
 
     def send(self, request: DataPacket):
         self.socket.send_json(asdict(request))
-        logger.info(f"Client sent request: {request}")
+        logger.debug(f"Client sent request: {request}")
 
     def recv(self) -> DataPacket:
         response = DataPacket.from_json_str(self.socket.recv())
-        logger.info(f"Client received response: {response}")
+        logger.debug(f"Client received response: {response}")
         return response

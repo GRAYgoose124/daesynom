@@ -1,9 +1,14 @@
-from dataclasses import asdict, dataclass, field
 import json
 import threading
+import uuid
+import logging
+
 from dataclass_wizard import JSONWizard
 from typing import Literal
-import uuid
+from dataclasses import asdict, dataclass, field
+
+
+logger = logging.getLogger(__name__)
 
 
 def handle_keyboard_interrupt(signal, frame):
@@ -84,11 +89,14 @@ class StoppableThread(threading.Thread):
     regularly for the stopped() condition."""
 
     def __init__(self, *args, **kwargs):
-        super(StoppableThread, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._stop_event = threading.Event()
 
     def stop(self):
         self._stop_event.set()
+        logger.debug(
+            f"Attempting to stop {self.__class__.__name__}: Worker-{self.ident}"
+        )
 
     @property
     def stopped(self):

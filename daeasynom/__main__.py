@@ -1,6 +1,7 @@
 import logging
 import random
 import time
+import zmq
 
 from .server import AbstractServer, AbstractWorkerThread
 from .client import AbstractClient
@@ -17,10 +18,12 @@ class DumbClient(AbstractClient):
         for request in requests:
             self.send(DataPacket(data=request))
 
-        for _ in range(n):
-            response = self.recv()
+        try:
+            for _ in range(n):
+                response = self.recv()
+        except zmq.error.ZMQBaseError:
+            pass
 
-        self.stop()
         logger.debug("Client stopped")
 
 
@@ -45,18 +48,17 @@ def main():
         while server_thread.is_alive():
             # Only killing server for demo purposes.
             if not client_thread.is_alive():
-                server_thread.stop()
+                logger.debug("Stopping client-server daemon")
                 break
             server_thread.join(timeout=2)
     except KeyboardInterrupt:
-        pass
+        logger.debug("KeyboardInterrupt")
     except Exception as e:
         logging.exception(e)
     finally:
-        if server_thread.is_alive():
-            server_thread.stop()
         if client_thread.is_alive():
             client_thread.stop()
+        if server_thread.is_alive():
+            server_thread.stop()
 
-        server_thread.join()
         client_thread.join()
