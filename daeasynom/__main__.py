@@ -8,6 +8,7 @@ from .utils import DataPacket
 
 logger = logging.getLogger(__name__)
 
+
 class DumbClient(AbstractClient):
     async def loop(self):
         n = 10
@@ -32,7 +33,7 @@ class LazyServer(AbstractServer):
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
-    
+
     port = 5555 + random.randint(0, 1000)
     server_thread = LazyServer(port=port)
     client_thread = DumbClient(port=port)
@@ -46,13 +47,16 @@ def main():
             if not client_thread.is_alive():
                 server_thread.stop()
                 break
-            server_thread.join(timeout=1)
+            server_thread.join(timeout=2)
     except KeyboardInterrupt:
-        server_thread.stop()
+        pass
     except Exception as e:
         logging.exception(e)
     finally:
+        if server_thread.is_alive():
+            server_thread.stop()
+        if client_thread.is_alive():
+            client_thread.stop()
+
         server_thread.join()
         client_thread.join()
-
-    

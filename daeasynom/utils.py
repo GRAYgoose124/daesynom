@@ -1,11 +1,14 @@
 from dataclasses import asdict, dataclass, field
 import json
+import threading
 from dataclass_wizard import JSONWizard
 from typing import Literal
 import uuid
 
+
 def handle_keyboard_interrupt(signal, frame):
     raise KeyboardInterrupt
+
 
 def hex_uuid():
     return uuid.uuid4().hex
@@ -35,21 +38,28 @@ class DataPacket(JSONWizard):
         else:
             self.results[name] = result
 
-    def add_result(self, name: str, result: str, multitype: Literal['single', 'multiple'] = 'multiple'):
+    def add_result(
+        self,
+        name: str,
+        result: str,
+        multitype: Literal["single", "multiple"] = "multiple",
+    ):
         if name not in self.results:
-            if multitype == 'single':
+            if multitype == "single":
                 self.results[name] = result
-            elif multitype == 'multiple':
+            elif multitype == "multiple":
                 self.results[name] = [result]
         else:
-            if multitype == 'single':
+            if multitype == "single":
                 self.add_error(f"{name=} is already in results, cannot add {result=}")
-            elif multitype == 'multiple':
+            elif multitype == "multiple":
                 self.results[name].append(result)
 
     def set_status(self, status: str):
         if self.status == "error" or self.status == "dead" or self.status == "complete":
-            self.errors.append(f"Cannot set status to {status=} when status is {self.status=}")
+            self.errors.append(
+                f"Cannot set status to {status=} when status is {self.status=}"
+            )
         else:
             self.status = status
 
@@ -67,3 +77,19 @@ class DataPacket(JSONWizard):
 
     def to_json_str(self):
         return json.dumps(asdict(self))
+
+
+class StoppableThread(threading.Thread):
+    """Thread class with a stop() method. The thread itself has to check
+    regularly for the stopped() condition."""
+
+    def __init__(self, *args, **kwargs):
+        super(StoppableThread, self).__init__(*args, **kwargs)
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        self._stop_event.set()
+
+    @property
+    def stopped(self):
+        return self._stop_event.is_set()

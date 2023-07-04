@@ -2,18 +2,16 @@ from abc import ABCMeta, abstractmethod
 import time
 import zmq
 import zmq.asyncio
-import threading
 import logging
 
-from daeasynom.utils import DataPacket
 
-from ..utils import DataPacket
+from ..utils import DataPacket, StoppableThread
 
 
 logger = logging.getLogger(__name__)
 
 
-class AbstractWorkerThread(threading.Thread, metaclass=ABCMeta):
+class AbstractWorkerThread(StoppableThread, metaclass=ABCMeta):
     def __init__(self, work_queue, port=5555):
         super().__init__()
         self.work_queue = work_queue
@@ -26,7 +24,7 @@ class AbstractWorkerThread(threading.Thread, metaclass=ABCMeta):
             f"tcp://localhost:{self.port}"
         )  # Connect to the main server thread
 
-        while True:
+        while not self.stopped:
             request = DataPacket.from_json_str(worker_socket.recv_string())
 
             self.work_queue.put((time.process_time(), self.ident, request.id))
@@ -46,7 +44,7 @@ class AbstractWorkerThread(threading.Thread, metaclass=ABCMeta):
 
         response.add_result("processed_by", f"Worker-{self.ident}")
         return response
-   
+
     @abstractmethod
     def request_handler(self, request: DataPacket, response: DataPacket):
         pass

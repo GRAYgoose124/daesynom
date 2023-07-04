@@ -1,18 +1,17 @@
 from abc import ABCMeta, abstractmethod
 import asyncio
 import logging
-import threading
 import zmq
 
 from dataclasses import asdict
 
-from ..utils import DataPacket
+from ..utils import DataPacket, StoppableThread
 
 
 logger = logging.getLogger(__name__)
 
 
-class AbstractClient(threading.Thread, metaclass=ABCMeta):
+class AbstractClient(StoppableThread, metaclass=ABCMeta):
     def __init__(self, ident=None, port=5555) -> None:
         super().__init__()
         self.client = None
@@ -24,10 +23,8 @@ class AbstractClient(threading.Thread, metaclass=ABCMeta):
             self.socket.setsockopt(zmq.IDENTITY, ident)
 
         self.socket.connect(f"tcp://localhost:{port}")
- 
-    def run(self):
-        asyncio.set_event_loop(asyncio.new_event_loop())
 
+    def run(self):
         try:
             asyncio.run(self.loop())
         except KeyboardInterrupt:
@@ -44,6 +41,7 @@ class AbstractClient(threading.Thread, metaclass=ABCMeta):
     def stop(self):
         self.socket.close()
         self.ctx.term()
+        super().stop()
 
     def send(self, request: DataPacket):
         self.socket.send_json(asdict(request))
@@ -53,4 +51,3 @@ class AbstractClient(threading.Thread, metaclass=ABCMeta):
         response = DataPacket.from_json_str(self.socket.recv())
         logger.info(f"Client received response: {response}")
         return response
-    
