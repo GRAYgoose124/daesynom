@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "daeasynom"
+version = "0.1.0"
+description = ""
+authors = ["Grayson <grayson.miller124@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+zmq = "^0.0.0"
+dataclass-wizard = "^0.22.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+daes = "daeasynom.__main__:main"
