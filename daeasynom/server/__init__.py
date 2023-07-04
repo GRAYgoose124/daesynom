@@ -1,4 +1,4 @@
-from .__main__ import Server
+from .__main__ import AbstractServer
 from .worker import AbstractWorkerThread
 
-__all__ = ["Server"]
+__all__ = ["AbstractServer", "AbstractWorkerThread"]

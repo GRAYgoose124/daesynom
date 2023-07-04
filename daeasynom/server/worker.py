@@ -4,7 +4,6 @@ import zmq
 import zmq.asyncio
 import threading
 import logging
-import random
 
 from daeasynom.utils import DataPacket
 
@@ -15,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 class AbstractWorkerThread(threading.Thread, metaclass=ABCMeta):
-    def __init__(self, port=5555):
+    def __init__(self, work_queue, port=5555):
         super().__init__()
+        self.work_queue = work_queue
         self.port = port
 
     def run(self):
@@ -28,11 +28,10 @@ class AbstractWorkerThread(threading.Thread, metaclass=ABCMeta):
 
         while True:
             request = DataPacket.from_json_str(worker_socket.recv_string())
-            logger.debug(
-                f"WorkerThread(ident={self.ident}) received request: {request}"
-            )
 
+            self.work_queue.put((time.process_time(), self.ident, request.id))
             response = self.process_request(request)
+            self.work_queue.put((time.process_time(), self.ident, request.id))
 
             worker_socket.send(response.to_json_str().encode("utf-8"))
 
@@ -51,8 +50,3 @@ class AbstractWorkerThread(threading.Thread, metaclass=ABCMeta):
     @abstractmethod
     def request_handler(self, request: DataPacket, response: DataPacket):
         pass
-
-
-class SlothfulWorkerThread(AbstractWorkerThread):
-    def request_handler(self, request: DataPacket, response: DataPacket):
-        time.sleep(random.random() * 5)

@@ -1,3 +1,3 @@
-from .__main__ import Client, ClientThread
+from .__main__ import AbstractClient
 
-__all__ = ["Client", "ClientThread"]
+__all__ = ["AbstractClient"]

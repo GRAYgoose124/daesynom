@@ -1,4 +1,6 @@
 import asyncio
+import queue
+import random
 import time
 import zmq
 import zmq.asyncio
@@ -6,13 +8,15 @@ import threading
 import logging
 
 from ..utils import DataPacket
-from .worker import SlothfulWorkerThread as Worker
+from .worker import AbstractWorkerThread
+
 
 logger = logging.getLogger(__name__)
 
 
-class Server(threading.Thread):
-    def __init__(self, port=5555, workers=10):
+class AbstractServer(threading.Thread):
+    Worker = AbstractWorkerThread
+    def __init__(self, port=5555, workers=25):
         super().__init__()
         self.ctx = zmq.asyncio.Context()
         self.socket = self.ctx.socket(zmq.ROUTER)
@@ -23,17 +27,19 @@ class Server(threading.Thread):
         self.poller.register(self.socket, zmq.POLLIN)
         self.poller.register(self.worker_socket, zmq.POLLIN)
 
-        self.workers = []
+        self.workers = {}
+        self.occupied_workers = {}
+        self.pending_requests = {}
+        self.work_queue = queue.Queue()
+        
         for _ in range(workers):
-            worker = Worker(port=self.worker_port)
+            worker = self.Worker(self.work_queue, port=self.worker_port)
             worker.daemon = True
             worker.start()
-            self.workers.append(worker)
+            self.workers[worker.ident] = worker
 
         self.running = False
         
-        self.pending_requests = {}
-
     def run(self):
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -51,9 +57,35 @@ class Server(threading.Thread):
         self.running = True
         while self.running:
             socks = dict(await self.poller.poll())
+
+            # TODO: abstractify task loops
             asyncio.create_task(self.handle_request(socks))
             asyncio.create_task(self.handle_response(socks))
+
+            if not self.work_queue.empty() and socks:
+                asyncio.create_task(self.handle_work_queue())
+
             await asyncio.sleep(0)
+
+    async def handle_work_queue(self):
+        while not self.work_queue.empty():
+            try:
+                proc_time, worker_id, req_id = self.work_queue.get(block=False, timeout=1)
+            except queue.Empty:
+                return
+            
+            if req_id:
+                self.occupied_workers[worker_id] = proc_time
+            else:
+                start_time = self.occupied_workers.pop(worker_id, None)
+
+                if start_time is None:
+                    logger.warning(f"Worker {worker_id} not found in occupied workers")
+                else:
+                    diff = proc_time - start_time
+                    logger.debug(f"Worker {worker_id} finished processing request {req_id} in {diff} seconds")
+        
+            self.work_queue.task_done()
 
     async def handle_request(self, socks):
         if self.socket in socks:
@@ -89,6 +121,8 @@ class Server(threading.Thread):
                 response.add_result("tampered", False)
                 del self.pending_requests[response.id]
 
+            response.data = request.data
+
             response = response.to_json_str().encode("utf-8")
             await self.socket.send_multipart([client_identity, response])
 
@@ -98,7 +132,7 @@ class Server(threading.Thread):
         self.socket.close()
         self.ctx.term()
 
-        for worker in self.workers:
+        for worker in self.workers.values():
             worker.join()
         
         super().stop()
