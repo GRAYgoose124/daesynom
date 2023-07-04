@@ -59,12 +59,12 @@ class AbstractWorkerThread(StoppableThread, metaclass=ABCMeta):
         response = DataPacket(id=request.id, ty="response")
 
         self.request_handler(request, response)
-        if response.id != request.id:
-            logger.warning(
-                f"Response and request id mismatch: {response.id} != {request.id}, tampering?"
-            )
+        # if response.id != request.id:
+        #     logger.warning(
+        #         f"Response and request id mismatch: {response.id} != {request.id}, tampering?"
+        #     )
 
-        response.add_result("processed_by", f"Worker-{self.ident}")
+        response.add_result("processed_by", f"{self.__class__.__name__}-{self.ident}")
         return response
 
     @abstractmethod

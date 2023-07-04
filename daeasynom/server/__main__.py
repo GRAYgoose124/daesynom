@@ -52,8 +52,6 @@ class AbstractServer(StoppableThread):
             pass
         except Exception as e:
             logger.exception(e)
-        finally:
-            self.stop()
 
     async def loop(self):
         # Start listening for client requests
@@ -85,7 +83,7 @@ class AbstractServer(StoppableThread):
             except queue.Empty:
                 req_id = None
 
-            print(f"Worker {worker_id} processing request {req_id}")
+            logger.debug(f"Worker {worker_id} processing request {req_id}")
 
             if req_id and worker_id not in self.occupied_workers:
                 self.occupied_workers[worker_id] = proc_time
@@ -150,6 +148,8 @@ class AbstractServer(StoppableThread):
         # destroy all pending tasks and stop the loop
         for task in self.tasks:
             task.cancel()
+
+        self._loop.stop()
 
         # stop all workers
         for worker in self.workers.values():

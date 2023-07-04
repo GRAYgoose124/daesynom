@@ -94,9 +94,7 @@ class StoppableThread(threading.Thread):
 
     def stop(self):
         self._stop_event.set()
-        logger.debug(
-            f"Attempting to stop {self.__class__.__name__}: Worker-{self.ident}"
-        )
+        logger.debug(f"Attempting to stop {self.__class__.__name__}-{self.ident}")
 
     @property
     def stopped(self):

@@ -1,5 +1,6 @@
 import logging
 import random
+import sys
 import time
 import zmq
 
@@ -31,7 +32,7 @@ class LazyServer(AbstractServer):
     class Worker(AbstractWorkerThread):
         def request_handler(self, request: DataPacket, response: DataPacket):
             time.sleep(random.random() * 5)
-            logger.debug(f"Worker {self.ident} processed request {request}")
+            logger.debug(f"Worker-{self.ident} processed request {request}")
 
 
 def main():
@@ -50,7 +51,7 @@ def main():
             if not client_thread.is_alive():
                 logger.debug("Stopping client-server daemon")
                 break
-            server_thread.join(timeout=2)
+            server_thread.join(2)
     except KeyboardInterrupt:
         logger.debug("KeyboardInterrupt")
     except Exception as e:
@@ -62,3 +63,15 @@ def main():
             server_thread.stop()
 
         client_thread.join()
+
+        tries_remaining = 5
+        while server_thread.is_alive() and tries_remaining:
+            logger.debug(
+                f"Waiting for server to stop ({tries_remaining} tries remaining)"
+            )
+            server_thread.join(2)
+            tries_remaining -= 1
+
+        if tries_remaining == 0:
+            logger.warning("Server did not stop after 10 seconds")
+            sys.exit(1)
