@@ -17,7 +17,7 @@ class Client:
             self.socket.setsockopt(zmq.IDENTITY, ident)
         self.socket.connect(f"tcp://localhost:{port}")
  
-    async def run(self):
+    async def loop(self):
         requests = [f"Req #{i}" for i in range(5)]
 
         for request in requests:
@@ -49,7 +49,7 @@ class ClientThread(threading.Thread):
         self.client = Client(port=self.port)
 
         try:
-            asyncio.run(self.client.run())
+            asyncio.run(self.client.loop())
         except KeyboardInterrupt:
             pass
         except Exception as e:

@@ -6,12 +6,12 @@ import threading
 import logging
 
 from ..utils import DataPacket
-from .worker import SlothfulWorkerThread
+from .worker import SlothfulWorkerThread as Worker
 
 logger = logging.getLogger(__name__)
 
 
-class Server:
+class Server(threading.Thread):
     def __init__(self, port=5555, workers=10):
         super().__init__()
         self.ctx = zmq.asyncio.Context()
@@ -24,8 +24,9 @@ class Server:
         self.poller.register(self.worker_socket, zmq.POLLIN)
 
         self.workers = []
-        for i in range(workers):
-            worker = SlothfulWorkerThread(port=self.worker_port)
+        for _ in range(workers):
+            worker = Worker(port=self.worker_port)
+            worker.daemon = True
             worker.start()
             self.workers.append(worker)
 
@@ -33,7 +34,19 @@ class Server:
         
         self.pending_requests = {}
 
-    async def run(self):
+    def run(self):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+        try:
+            asyncio.run(self.loop())
+        except KeyboardInterrupt:
+            pass
+        except Exception as e:
+            logger.exception(e)
+        finally:
+            self.stop()
+
+    async def loop(self):
         # Start listening for client requests
         self.running = True
         while self.running:
@@ -85,26 +98,14 @@ class Server:
         self.socket.close()
         self.ctx.term()
 
-class ServerThread(threading.Thread):
-    def __init__(self, port=5555):
-        super().__init__()
-        self.server = None
-        self.port = port
+        for worker in self.workers:
+            worker.join()
+        
+        super().stop()
 
-    def run(self, port=5555):
-        import asyncio
 
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        self.server = Server(port=self.port)
 
-        try:
-            asyncio.run(self.server.run())
-        except KeyboardInterrupt:
-            pass
-        except Exception as e:
-            logger.exception(e)
-        finally:
-            self.server.stop()
+
 
 
 
