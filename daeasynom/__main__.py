@@ -5,7 +5,7 @@ from .server import ServerThread
 from .client import ClientThread
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     
     port = 5555 + random.randint(0, 1000)
     server_thread = ServerThread(port=port)
@@ -19,6 +19,8 @@ def main():
             server_thread.join(timeout=3)
     except KeyboardInterrupt:
         server_thread.server.stop()
+    except Exception as e:
+        logging.exception(e)
     finally:
         server_thread.join()
         client_thread.join()

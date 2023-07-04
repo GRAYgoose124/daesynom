@@ -52,5 +52,7 @@ class ClientThread(threading.Thread):
             asyncio.run(self.client.run())
         except KeyboardInterrupt:
             pass
+        except Exception as e:
+            logger.exception(e)
         finally:
             self.client.stop()

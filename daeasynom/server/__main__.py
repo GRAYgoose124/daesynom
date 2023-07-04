@@ -1,16 +1,18 @@
+import asyncio
 import time
 import zmq
 import zmq.asyncio
 import threading
 import logging
 
-from .worker import WorkerThread
+from ..utils import DataPacket
+from .worker import SlothfulWorkerThread
 
 logger = logging.getLogger(__name__)
 
 
 class Server:
-    def __init__(self, port=5555):
+    def __init__(self, port=5555, workers=10):
         super().__init__()
         self.ctx = zmq.asyncio.Context()
         self.socket = self.ctx.socket(zmq.ROUTER)
@@ -21,39 +23,61 @@ class Server:
         self.poller.register(self.socket, zmq.POLLIN)
         self.poller.register(self.worker_socket, zmq.POLLIN)
 
-        self.workers = None
-        self._init_workers(10)
-
-        self.running = False
-
-    def _init_workers(self, n=3):
         self.workers = []
-        for i in range(n):
-            worker = WorkerThread(port=self.worker_port)
+        for i in range(workers):
+            worker = SlothfulWorkerThread(port=self.worker_port)
             worker.start()
             self.workers.append(worker)
+
+        self.running = False
+        
+        self.pending_requests = {}
 
     async def run(self):
         # Start listening for client requests
         self.running = True
         while self.running:
             socks = dict(await self.poller.poll())
-            if self.socket in socks:
-                # Receive client identity and request
-                client_identity, request = await self.socket.recv_multipart()
-                logger.debug(
-                    f"Server received request from client {client_identity}: {request}"
+            asyncio.create_task(self.handle_request(socks))
+            asyncio.create_task(self.handle_response(socks))
+            await asyncio.sleep(0)
+
+    async def handle_request(self, socks):
+        if self.socket in socks:
+            # Receive request from client and send to a worker
+            client_identity, req_bytes = await self.socket.recv_multipart()
+            request = DataPacket.from_json_str(req_bytes.decode())
+            request.set_status("pending")
+            self.pending_requests[request.id] = [client_identity, request]
+
+            request = request.to_json_str().encode("utf-8")
+            await self.worker_socket.send(request)
+    
+    async def handle_response(self, socks):
+        if self.worker_socket in socks:
+            # Receive response from a worker and send to client
+            res_bytes = await self.worker_socket.recv()
+            response = DataPacket.from_json_str(res_bytes.decode())
+            response.set_status("completed")
+            
+            client_identity, request = self.pending_requests[response.id]
+            if request.id != response.id:
+                logger.warning(
+                    f"Response and request id mismatch: {response.id} != {request.id}, tampering?"
                 )
+                response.add_result("tampered", True)
+                if response.id in self.pending_requests:
+                    del self.pending_requests[response.id]
+                    response.add_result("finished_request", response.id)
+                if request.id in self.pending_requests:
+                    del self.pending_requests[request.id]
+                    response.add_result("finished_request", request.id)
+            else:
+                response.add_result("tampered", False)
+                del self.pending_requests[response.id]
 
-                # Send the request to an available worker
-                await self.worker_socket.send(request)
-            if self.worker_socket in socks:
-                # Receive response from worker
-                response = await self.worker_socket.recv()
-                logger.debug(f"Server received response from worker: {response}")
-
-                # Send the response back to the client
-                await self.socket.send_multipart([client_identity, response])
+            response = response.to_json_str().encode("utf-8")
+            await self.socket.send_multipart([client_identity, response])
 
     def stop(self):
         self.running = False
@@ -77,6 +101,8 @@ class ServerThread(threading.Thread):
             asyncio.run(self.server.run())
         except KeyboardInterrupt:
             pass
+        except Exception as e:
+            logger.exception(e)
         finally:
             self.server.stop()
 

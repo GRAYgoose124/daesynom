@@ -16,30 +16,49 @@ class DataPacket(JSONWizard):
     id: str = field(default_factory=hex_uuid, hash=True)
     ty: Literal["request", "response", "unknown"] = "unknown"
     status: Literal[
-        "submitted", "working", "pending", "error", "timeout", "complete"
-    ] = "pending"
+        "fresh", "submitted", "pending", "working", "error", "dead", "complete"
+    ] = "fresh"
     data: str = field(default_factory=str)
     errors: list[str] = field(default_factory=list)
     results: dict[str] = field(default_factory=dict)
 
-    def add_error(self, error: str):
-        if self.status == "complete":
-            return
-
-        self.status = "error"
-        self.errors.append(error)
-
-    def add_result(self, name: str, result: str):
-        if self.status == "complete":
-            return
-
-        if name not in self.results:
-            self.results[name] = [result]
+    def add_error(self, error: str, ty: str = "default"):
+        self.set_status("error")
+        if ty not in self.errors:
+            self.errors[ty] = [error]
         else:
-            self.results[name].append(result)
+            self.errors[ty].append(error)
+
+    def update_result(self, name: str, result: str):
+        if name not in self.results:
+            self.add_error(f"{name=} is not in results, cannot update {result=}")
+        else:
+            self.results[name] = result
+
+    def add_result(self, name: str, result: str, multitype: Literal['single', 'multiple'] = 'multiple'):
+        if name not in self.results:
+            if multitype == 'single':
+                self.results[name] = result
+            elif multitype == 'multiple':
+                self.results[name] = [result]
+        else:
+            if multitype == 'single':
+                self.add_error(f"{name=} is already in results, cannot add {result=}")
+            elif multitype == 'multiple':
+                self.results[name].append(result)
+
+    def set_status(self, status: str):
+        if self.status == "error" or self.status == "dead" or self.status == "complete":
+            self.errors.append(f"Cannot set status to {status=} when status is {self.status=}")
+        else:
+            self.status = status
 
     def done(self):
-        self.status = "complete"
+        if self.status == "error":
+            self.set_status("dead")
+        else:
+            self.set_status("complete")
+
         return self
 
     @staticmethod
