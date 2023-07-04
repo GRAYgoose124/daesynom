@@ -1,52 +1,22 @@
-import signal
 import time
 import zmq
 import zmq.asyncio
 import threading
 import logging
-import random
 
-from .utils import DataPacket
-
+from .worker import WorkerThread
 
 logger = logging.getLogger(__name__)
 
 
-class WorkerThread(threading.Thread):
-    def run(self):
-        context = zmq.Context()
-        worker_socket = context.socket(zmq.DEALER)
-        worker_socket.connect(
-            "tcp://localhost:5556"
-        )  # Connect to the main server thread
-
-        while True:
-            request = DataPacket.from_json_str(worker_socket.recv_string())
-            logger.debug(
-                f"WorkerThread(ident={self.ident}) received request: {request}"
-            )
-
-            response = self.process_request(request)
-
-            worker_socket.send(response.to_json_str().encode("utf-8"))
-
-    def process_request(self, request: DataPacket) -> DataPacket:
-        response = DataPacket(id=request.id, ty="response")
-
-        time.sleep(random.random() * 5)
-
-        response.add_result("processed_by", f"WorkerThread(ident={self.ident})")
-        return response
-
-
 class Server:
-    def __init__(self):
+    def __init__(self, port=5555):
         super().__init__()
         self.ctx = zmq.asyncio.Context()
         self.socket = self.ctx.socket(zmq.ROUTER)
-        self.socket.bind("tcp://*:5555")
+        self.socket.bind(f"tcp://*:{port}")
         self.worker_socket = self.ctx.socket(zmq.DEALER)
-        self.worker_socket.bind("tcp://*:5556")
+        self.worker_port = self.worker_socket.bind_to_random_port("tcp://*")
         self.poller = zmq.asyncio.Poller()
         self.poller.register(self.socket, zmq.POLLIN)
         self.poller.register(self.worker_socket, zmq.POLLIN)
@@ -59,7 +29,7 @@ class Server:
     def _init_workers(self, n=3):
         self.workers = []
         for i in range(n):
-            worker = WorkerThread()
+            worker = WorkerThread(port=self.worker_port)
             worker.start()
             self.workers.append(worker)
 
@@ -92,15 +62,16 @@ class Server:
         self.ctx.term()
 
 class ServerThread(threading.Thread):
-    def __init__(self):
+    def __init__(self, port=5555):
         super().__init__()
         self.server = None
+        self.port = port
 
-    def run(self):
+    def run(self, port=5555):
         import asyncio
 
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        self.server = Server()
+        self.server = Server(port=self.port)
 
         try:
             asyncio.run(self.server.run())
