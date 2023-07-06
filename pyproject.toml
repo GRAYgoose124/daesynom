@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.9"
 zmq = "^0.0.0"
 dataclass-wizard = "^0.22.2"
+pydantic = "^2.0.2"
 
 
 [build-system]
@@ -17,3 +18,4 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 daes = "daeasynom.__main__:main"
+tpool = "daeasynom.pool.__main__:main"
