@@ -20,7 +20,7 @@ def create_str_enum_type(name: str, values: list[str]) -> enum.Enum:
     return enum_type
 
 
-class ActionSettingMeta(type):
+class ActionsMeta(type):
     def __new__(cls, name, bases, attrs):
         if "Actions" in attrs:
             # add each action staticmethod to a dict of action, functions
@@ -30,13 +30,5 @@ class ActionSettingMeta(type):
                 if isinstance(v, staticmethod)
             }
             attrs["Actions"] = actions
-
-        if "Settings" in attrs:
-            # add each setting to the class
-            for k, v in attrs["Settings"].__dict__.items():
-                if not k.startswith("__"):
-                    attrs[k] = v
-
-            del attrs["Settings"]
 
         return super().__new__(cls, name, bases, attrs)

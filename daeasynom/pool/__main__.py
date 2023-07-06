@@ -5,9 +5,8 @@ from .pool import QueueingThreadPool
 
 
 class MyQTP(QueueingThreadPool):
-    class Settings:
-        max_jobs = 100
-        num_threads = 4
+    max_jobs = 100
+    num_threads = 4
 
     class Actions:
         @staticmethod
@@ -33,23 +32,25 @@ def main():
     qtp = MyQTP()
     qtp.start()
 
-    running = True
-    while running:
-        qtp.submit_work("pprint", ("Hello",))
-        qtp.submit_work("plen", ("Hello",))
-        qtp.submit_work("pstr", (123,))
-        qtp.submit_work("psum", ([1, 2, 3],))
-        try:
-            qtp.submit_work("notavalidrequest", ([1, 2, 3, 4],))
-        except Exception as e:
-            print(e)
-            break
+    try:
+        running = True
+        while running:
+            qtp.submit_work("pprint", ("Hello",))
+            qtp.submit_work("plen", ("Hello",))
+            qtp.submit_work("pstr", (123,))
+            qtp.submit_work("psum", ([1, 2, 3],))
+            try:
+                qtp.submit_work("notavalidrequest", ([1, 2, 3, 4],))
+            except Exception as e:
+                print(e)
+                break
 
-        time.sleep(0.5)
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        qtp.join()
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        pass
+    main()

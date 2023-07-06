@@ -15,9 +15,11 @@ class EOQTerminateThread(object):
 
 
 class QueueingWorkThread(threading.Thread, metaclass=ABCMeta):
-    def __init__(self, queue: Queue, actions: dict):
+    def __init__(self, queue: Queue, running: Queue, actions: dict):
         super().__init__()
         self._queue = queue
+        self._running_queue = running
+
         self._actions: dict[callable] = actions
 
         self.failed_jobs = []
@@ -27,6 +29,8 @@ class QueueingWorkThread(threading.Thread, metaclass=ABCMeta):
         item = None
         while item is not EOQTerminateThread:
             item = self.get_work()
+            if item is EOQTerminateThread:
+                break
 
             failed = False
             resubmit = True
@@ -57,6 +61,18 @@ class QueueingWorkThread(threading.Thread, metaclass=ABCMeta):
         item = self._queue.get()
         if item is not EOQTerminateThread:
             logger.debug(f"Got work {item.id}")
+        else:
+            return item
+
+        if "start_time" not in item.meta:
+            item.meta["start_time"] = time.time()
+
+        if "accessed_by" not in item.meta:
+            item.meta["accessed_by"] = []
+        item.meta["accessed_by"].append(self.ident)
+        item.meta["active_thread"] = self.ident
+
+        self._running_queue.put(item)
         return item
 
     def finish_work(
@@ -73,6 +89,9 @@ class QueueingWorkThread(threading.Thread, metaclass=ABCMeta):
                 self.failed_jobs.append(item.id)
 
         else:
+            item.meta["end_time"] = time.time()
+            item.meta["duration"] = item.meta["end_time"] - item.meta["start_time"]
+            item.meta["completed_by"] = self.ident
             self.finished_jobs.append(item.id)
 
         if resubmit:
